@@ -95,14 +95,86 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /**
+   * Compress or convert a single image File > 3.5MB to JPEG Blob so it stays well under Vercel's 4.5MB limit
+   */
+  async function ensureImageUnderLimit(file) {
+    if (file.size <= 3.5 * 1024 * 1024) return file;
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const maxDim = 2400;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+          } else {
+            resolve(file);
+          }
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  }
+
+  /**
+   * Render one PDF page to a high-resolution JPEG File in the browser using PDF.js
+   */
+  async function renderPdfPageToJpegFile(pdfDoc, pageNum, baseName) {
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 2.0 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    const pageFileName = `${baseName}_p${pageNum}.jpg`;
+    return {
+      file: new File([blob], pageFileName, { type: 'image/jpeg' }),
+      blobUrl: URL.createObjectURL(blob)
+    };
+  }
+
+  /**
+   * Safely parse JSON response from server (handles Vercel 413/504 plain-text errors gracefully)
+   */
+  async function safeParseJsonResponse(response) {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (response.status === 413 || text.includes('Request Entity Too Large')) {
+        throw new Error('파일 용량이 서버 단일 요청 한도(4.5MB)를 초과했습니다.');
+      }
+      if (response.status === 504 || text.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+        throw new Error('AI 분석 시간이 서버 제한 시간을 초과했습니다.');
+      }
+      throw new Error(text.slice(0, 120) || `서버 응답 오류 (HTTP ${response.status})`);
+    }
+  }
+
+  /**
    * Uploads file to backend API pipeline (POST /api/assessments/upload)
+   * Automatically splits PDF pages in the browser so large PDFs never hit Vercel's 4.5MB request limit or function timeout.
    */
   async function handleFileUpload(file) {
-    const jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('jobId', jobId);
-
     showUploadProgress(true);
 
     const progressFill = document.getElementById('progress-fill');
@@ -114,7 +186,158 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (progressFill) progressFill.style.width = '5%';
 
-    // Real-time per-page progress polling (e.g., 1/14, 2/14 ... 14/14)
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const localBlobUrl = URL.createObjectURL(file);
+    loadedPdfDoc = null;
+
+    // Client-side per-page PDF pipeline (prevents Vercel 4.5MB 413 Request Entity Too Large & serverless timeouts)
+    if (isPdf && window.pdfjsLib) {
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdfDoc = await pdfjsLib.getDocument(localBlobUrl).promise;
+        loadedPdfDoc = pdfDoc;
+        const totalPages = pdfDoc.numPages;
+        const baseName = file.name.replace(/\.pdf$/i, '');
+
+        if (progressStatusText) {
+          progressStatusText.innerText = `⚡ PDF 총 ${totalPages}페이지 고해상도 분할 완료 ➔ AI 병렬 정밀 분석 시작...`;
+        }
+        if (progressSubtext) {
+          progressSubtext.innerText = `개별 페이지 1:1 AI 추출 진행률: 0 / ${totalPages} 페이지 완료 (5%)`;
+        }
+
+        const pageResults = new Array(totalPages);
+        const pageBlobUrls = new Array(totalPages);
+        let completedCount = 0;
+        let mainProvider = 'Google Gemini 3.6 Flash Parallel High-Res Vision Engine';
+        let totalConfidence = 0;
+        let combinedRawText = '';
+
+        // Process 2 pages concurrently so each request is ~400KB and finishes in ~3s
+        const concurrency = 2;
+        for (let i = 0; i < totalPages; i += concurrency) {
+          const batchPageNums = [];
+          for (let j = i; j < Math.min(i + concurrency, totalPages); j++) {
+            batchPageNums.push(j + 1);
+          }
+
+          await Promise.all(batchPageNums.map(async (pageNum) => {
+            const { file: pageJpegFile, blobUrl } = await renderPdfPageToJpegFile(pdfDoc, pageNum, baseName);
+            pageBlobUrls[pageNum - 1] = blobUrl;
+
+            const pageJobId = `job_${Date.now()}_p${pageNum}`;
+            const pageFormData = new FormData();
+            pageFormData.append('file', pageJpegFile);
+            pageFormData.append('jobId', pageJobId);
+
+            const response = await fetch('/api/assessments/upload', {
+              method: 'POST',
+              headers: { 'X-Job-Id': pageJobId },
+              body: pageFormData
+            });
+
+            const resJson = await safeParseJsonResponse(response);
+            if (!resJson.success) {
+              throw new Error(resJson.error || `${pageNum}페이지 분석 실패`);
+            }
+
+            pageResults[pageNum - 1] = resJson.data;
+            completedCount++;
+            const pct = Math.min(99, Math.round((completedCount / totalPages) * 100));
+            if (progressFill) progressFill.style.width = `${pct}%`;
+            if (progressStatusText) {
+              progressStatusText.innerText = `⚡ ${completedCount} / ${totalPages} 페이지 AI 1:1 개별 정밀 분석 완료 (${pct}%)`;
+            }
+            if (progressSubtext) {
+              progressSubtext.innerText = `개별 페이지 1:1 AI 추출 진행률: ${completedCount} / ${totalPages} 페이지 완료 (${pct}%)`;
+            }
+          }));
+        }
+
+        // Merge all pages' siteMetadata and riskItems in page order
+        const combinedMeta = {
+          monthWeek: '',
+          siteName: '',
+          meetingDate: '',
+          workType: '',
+          workPeriod: '',
+          author: '',
+          siteManager: ''
+        };
+        let combinedRiskItems = [];
+
+        pageResults.forEach((pageData, idx) => {
+          const pNum = idx + 1;
+          if (!pageData) return;
+          if (pageData.ocr?.provider) mainProvider = pageData.ocr.provider;
+          totalConfidence += pageData.ocr?.confidenceScore || 0.98;
+          if (pageData.ocr?.rawText) {
+            combinedRawText += `\n--- 페이지 ${pNum} ---\n` + pageData.ocr.rawText + '\n';
+          }
+
+          const structured = pageData.structured || {};
+          const sm = structured.siteMetadata || {};
+          if (!combinedMeta.monthWeek && sm.monthWeek) combinedMeta.monthWeek = sm.monthWeek;
+          if (!combinedMeta.siteName && sm.siteName) combinedMeta.siteName = sm.siteName;
+          if (!combinedMeta.meetingDate && sm.meetingDate) combinedMeta.meetingDate = sm.meetingDate;
+          if (!combinedMeta.workType && sm.workType) combinedMeta.workType = sm.workType;
+          if (!combinedMeta.workPeriod && sm.workPeriod) combinedMeta.workPeriod = sm.workPeriod;
+          if (!combinedMeta.author && sm.author) combinedMeta.author = sm.author;
+          if (!combinedMeta.siteManager && sm.siteManager) combinedMeta.siteManager = sm.siteManager;
+
+          if (Array.isArray(structured.riskItems)) {
+            const itemsWithPage = structured.riskItems.map(item => ({
+              ...item,
+              pageNumber: pNum,
+              workType: item.workType || sm.workType || '',
+              author: item.author || sm.author || ''
+            }));
+            combinedRiskItems = combinedRiskItems.concat(itemsWithPage);
+          }
+        });
+
+        showUploadProgress(false);
+        showToast(`PDF 총 ${totalPages}페이지 1:1 AI 정밀 추출 완료!`, 'success');
+
+        populateEditorView({
+          fileInfo: {
+            originalName: file.name,
+            filename: file.name,
+            fileUrl: localBlobUrl,
+            localBlobUrl,
+            isPdf: true,
+            pageCount: totalPages,
+            imageUrls: pageBlobUrls
+          },
+          ocr: {
+            provider: mainProvider,
+            confidenceScore: totalConfidence / Math.max(1, totalPages),
+            rawText: combinedRawText.trim(),
+            blocks: []
+          },
+          structured: {
+            isSupportedFormat: true,
+            siteMetadata: combinedMeta,
+            riskItems: combinedRiskItems
+          }
+        });
+        switchTab('editor');
+        return;
+      } catch (pdfErr) {
+        showUploadProgress(false);
+        showToast('분석 오류: ' + pdfErr.message, 'danger');
+        return;
+      }
+    }
+
+    // Single Image (or fallback) upload
+    const jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const uploadReadyFile = isPdf ? file : await ensureImageUnderLimit(file);
+    const formData = new FormData();
+    formData.append('file', uploadReadyFile);
+    formData.append('jobId', jobId);
+
+    // Real-time per-page progress polling
     const pollInterval = setInterval(async () => {
       try {
         const pRes = await fetch(`/api/assessments/upload/progress/${jobId}`);
@@ -144,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       clearInterval(pollInterval);
-      const result = await response.json();
+      const result = await safeParseJsonResponse(response);
       showUploadProgress(false);
 
       if (!result.success) {
@@ -152,7 +375,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      showToast('PDF 개별 페이지 1:1 AI 정밀 추출 완료!', 'success');
+      if (result.data && result.data.fileInfo) {
+        result.data.fileInfo.localBlobUrl = localBlobUrl;
+        if (!result.data.fileInfo.imageUrls || result.data.fileInfo.imageUrls.length === 0) {
+          result.data.fileInfo.imageUrls = [localBlobUrl];
+        }
+      }
+
+      showToast('AI 정밀 추출 완료!', 'success');
       populateEditorView(result.data);
       switchTab('editor');
 
