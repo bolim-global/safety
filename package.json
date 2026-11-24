@@ -1,0 +1,41 @@
+{
+  "name": "construction-safety-ocr-analytics",
+  "version": "1.0.0",
+  "description": "Handwritten Safety Risk Assessment (안전위험성평가) OCR & AI Prevention Insight Platform",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "build": "npx prisma generate",
+    "postinstall": "prisma generate",
+    "db:push": "npx prisma db push",
+    "db:generate": "npx prisma generate",
+    "db:seed": "node src/utils/seed.js"
+  },
+  "keywords": [
+    "construction-safety",
+    "ocr",
+    "handwriting-recognition",
+    "ai-risk-assessment",
+    "express",
+    "prisma"
+  ],
+  "author": "Antigravity AI",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.16.0",
+    "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^5.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.3",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.28.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.2.108",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.10.0"
+  }
+}

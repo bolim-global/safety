@@ -1,0 +1,49 @@
+// Prisma Schema for Construction Safety Risk Assessment System
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Assessment {
+  id              String     @id @default(uuid())
+  siteName        String     // 현장명 (e.g., 서울 강남 신축공사 현장)
+  assessmentDate  String     // 평가일자 (e.g., 2026-07-29)
+  assessor        String     // 평가자 (e.g., 김안전 과장)
+  workType        String     // 공종 (e.g., 가설공사, 토공사, 철골공사, 마감공사)
+  status          String     @default("VERIFIED") // DRAFT, PENDING_REVIEW, VERIFIED
+  rawOcrText      String?    // 원본 OCR 텍스트
+  pdfFilename     String?    // 업로드된 PDF 파일명
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  riskItems       RiskItem[]
+}
+
+model RiskItem {
+  id                String     @id @default(uuid())
+  assessmentId      String
+  assessment        Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  locationEquipment String     // 위험장소/장비
+  riskFactor        String     // 위험요인 (손글씨 보정된 위험요인)
+  frequency         String     // 위험성 빈도 (1~5 또는 상/중/하)
+  severity          String     // 위험성 강도 (1~5 또는 상/중/하)
+  riskGrade         String     // 위험성 수준 (상/중/하, Red/Yellow/Green)
+  safetyMeasure     String     // 감소대책/예방대책
+  
+  createdAt         DateTime   @default(now())
+}
+
+model OcrCorrection {
+  id               String   @id @default(uuid())
+  rawSnippet       String   // AI가 최초 오인식한 원본 텍스트
+  correctedSnippet String   // 사용자가 수동 보정한 정답 텍스트
+  category         String   @default("GENERAL") // WORK_TYPE, AUTHOR, LOCATION, RISK_FACTOR, SAFETY_MEASURE
+  count            Int      @default(1) // 교정 빈도수
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
