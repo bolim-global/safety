@@ -62,6 +62,8 @@ class GlossaryService {
    * Save user glossary to disk
    */
   saveUserGlossary() {
+    this._cachedPromptStr = null;
+    this._cachedPromptAt = 0;
     try {
       const data = {
         updatedAt: new Date().toISOString(),
@@ -152,6 +154,11 @@ class GlossaryService {
    * Formats accumulated terms into lightweight prompt string for Gemini Vision AI learning
    */
   async getFormattedPromptString() {
+    const now = Date.now();
+    if (this._cachedPromptStr && this._cachedPromptAt && (now - this._cachedPromptAt < 30000)) {
+      return this._cachedPromptStr;
+    }
+
     const terms = await this.getAccumulatedTerms();
     const correctionsMap = await this.getCorrectionPairs();
     
@@ -165,7 +172,9 @@ class GlossaryService {
         .join(', ');
       promptStr += ` | 필체 오독 방지 가이드: ${correctionRules}`;
     }
-    
+
+    this._cachedPromptStr = promptStr;
+    this._cachedPromptAt = now;
     return promptStr;
   }
 

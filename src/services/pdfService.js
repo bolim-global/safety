@@ -30,6 +30,16 @@ class PdfService {
     const pageCount = srcDoc.getPageCount();
 
     const pages = [];
+    if (pageCount === 1) {
+      // Fast zero-copy path when client already split into a 1-page PDF
+      pages.push({
+        pageNumber: 1,
+        filePath,
+        relPath: `/uploads/${path.basename(filePath)}`
+      });
+      return { pageCount: 1, pages };
+    }
+
     for (let i = 0; i < pageCount; i++) {
       const subDoc = await PDFDocument.create();
       const [copiedPage] = await subDoc.copyPages(srcDoc, [i]);
@@ -92,28 +102,31 @@ class PdfService {
       const { pageCount, pages } = await this.splitPdfToSubPdfs(filePath);
 
       let fullText = '';
-      try {
-        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-        const pdfBuffer = fs.readFileSync(filePath);
-        const loadingTask = pdfjsLib.getDocument({
-          data: new Uint8Array(pdfBuffer),
-          useSystemFonts: true,
-          isEvalSupported: false
-        });
+      // Skip heavy pdfjs-dist digital text parsing when Gemini Vision OCR is primary engine
+      if (config.ocrProvider && config.ocrProvider.toLowerCase() !== 'gemini') {
+        try {
+          const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+          const pdfBuffer = fs.readFileSync(filePath);
+          const loadingTask = pdfjsLib.getDocument({
+            data: new Uint8Array(pdfBuffer),
+            useSystemFonts: true,
+            isEvalSupported: false
+          });
 
-        const pdfDoc = await loadingTask.promise;
-        for (let i = 1; i <= pageCount; i++) {
-          const page = await pdfDoc.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageStrings = textContent.items.map(item => item.str).filter(Boolean);
-          const pageText = pageStrings.join(' ').trim();
+          const pdfDoc = await loadingTask.promise;
+          for (let i = 1; i <= pageCount; i++) {
+            const page = await pdfDoc.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageStrings = textContent.items.map(item => item.str).filter(Boolean);
+            const pageText = pageStrings.join(' ').trim();
 
-          if (pageText.length > 0) {
-            fullText += `\n--- [페이지 ${i} 디지털 텍스트] ---\n` + pageText + '\n';
+            if (pageText.length > 0) {
+              fullText += `\n--- [페이지 ${i} 디지털 텍스트] ---\n` + pageText + '\n';
+            }
           }
+        } catch (textErr) {
+          console.warn('[PDF Text Extract Warning]', textErr.message);
         }
-      } catch (textErr) {
-        console.warn('[PDF Text Extract Warning]', textErr.message);
       }
 
       return {

@@ -233,23 +233,88 @@ document.addEventListener('DOMContentLoaded', () => {
         const pageResults = new Array(totalPages);
         const pageBlobUrls = new Array(totalPages);
         let completedCount = 0;
-        let mainProvider = 'Google Gemini 3.6 Flash Parallel High-Res Vision Engine';
-        let totalConfidence = 0;
-        let combinedRawText = '';
+        let hasSwitchedToLiveEditor = false;
 
-        // Process 2 pages concurrently so each request is ~500KB and finishes in ~3s
-        const concurrency = 2;
-        for (let i = 0; i < totalPages; i += concurrency) {
-          if (i > 0) await new Promise(r => setTimeout(r, 150));
-          const batchPageNums = [];
-          for (let j = i; j < Math.min(i + concurrency, totalPages); j++) {
-            batchPageNums.push(j + 1);
-          }
+        const buildMergedPayload = () => {
+          let mainProvider = 'Google Gemini 3.6 Flash Parallel High-Res Vision Engine';
+          let totalConfidence = 0;
+          let validPages = 0;
+          let combinedRawText = '';
+          const combinedMeta = {
+            monthWeek: '',
+            siteName: '',
+            meetingDate: '',
+            workType: '',
+            workPeriod: '',
+            author: '',
+            siteManager: ''
+          };
+          let combinedRiskItems = [];
 
-          await Promise.all(batchPageNums.map(async (pageNum) => {
+          pageResults.forEach((pageData, idx) => {
+            const pNum = idx + 1;
+            if (!pageData) return;
+            validPages++;
+            if (pageData.ocr?.provider) mainProvider = pageData.ocr.provider;
+            totalConfidence += pageData.ocr?.confidenceScore || 0.98;
+            if (pageData.ocr?.rawText) {
+              combinedRawText += `\n--- 페이지 ${pNum} ---\n` + pageData.ocr.rawText + '\n';
+            }
+
+            const structured = pageData.structured || {};
+            const sm = structured.siteMetadata || {};
+            if (!combinedMeta.monthWeek && sm.monthWeek) combinedMeta.monthWeek = sm.monthWeek;
+            if (!combinedMeta.siteName && sm.siteName) combinedMeta.siteName = sm.siteName;
+            if (!combinedMeta.meetingDate && sm.meetingDate) combinedMeta.meetingDate = sm.meetingDate;
+            if (!combinedMeta.workType && sm.workType) combinedMeta.workType = sm.workType;
+            if (!combinedMeta.workPeriod && sm.workPeriod) combinedMeta.workPeriod = sm.workPeriod;
+            if (!combinedMeta.author && sm.author) combinedMeta.author = sm.author;
+            if (!combinedMeta.siteManager && sm.siteManager) combinedMeta.siteManager = sm.siteManager;
+
+            if (Array.isArray(structured.riskItems)) {
+              const itemsWithPage = structured.riskItems.map(item => ({
+                ...item,
+                pageNumber: pNum,
+                workType: item.workType || sm.workType || '',
+                author: item.author || sm.author || ''
+              }));
+              combinedRiskItems = combinedRiskItems.concat(itemsWithPage);
+            }
+          });
+
+          return {
+            fileInfo: {
+              originalName: file.name,
+              filename: file.name,
+              fileUrl: localBlobUrl,
+              localBlobUrl,
+              isPdf: true,
+              pageCount: totalPages,
+              imageUrls: pageBlobUrls
+            },
+            ocr: {
+              provider: mainProvider,
+              confidenceScore: totalConfidence / Math.max(1, validPages),
+              rawText: combinedRawText.trim(),
+              blocks: []
+            },
+            structured: {
+              isSupportedFormat: true,
+              siteMetadata: combinedMeta,
+              riskItems: combinedRiskItems
+            }
+          };
+        };
+
+        // High-speed parallel pool (8 concurrent workers) + live streaming into editor table on first page completion!
+        const concurrency = Math.min(8, totalPages);
+        let nextPageIndex = 0;
+
+        const runWorker = async () => {
+          while (nextPageIndex < totalPages) {
+            const pageNum = ++nextPageIndex;
             let pageUploadFile = null;
 
-            // 1st choice: Lossless 1-page PDF split via self-hosted PDFLib (~500KB per page)
             if (srcPdfLibDoc) {
               const subDoc = await window.PDFLib.PDFDocument.create();
               const [copiedPage] = await subDoc.copyPages(srcPdfLibDoc, [pageNum - 1]);
@@ -263,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             }
 
-            // 2nd choice (if single PDF page > 3.5MB or PDFLib unavailable): compressed JPEG via PDF.js
             if (!pageUploadFile && pdfJsDoc) {
               const rendered = await renderPdfPageToJpegFile(pdfJsDoc, pageNum, baseName);
               pageUploadFile = rendered.file;
@@ -295,82 +359,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const pct = Math.min(99, Math.round((completedCount / totalPages) * 100));
             if (progressFill) progressFill.style.width = `${pct}%`;
             if (progressStatusText) {
-              progressStatusText.innerText = `⚡ ${completedCount} / ${totalPages} 페이지 AI 1:1 개별 정밀 분석 완료 (${pct}%)`;
+              progressStatusText.innerText = `⚡ ${completedCount} / ${totalPages} 페이지 초고속 병렬 분석 완료 (${pct}%)`;
             }
             if (progressSubtext) {
-              progressSubtext.innerText = `개별 페이지 1:1 AI 추출 진행률: ${completedCount} / ${totalPages} 페이지 완료 (${pct}%)`;
+              progressSubtext.innerText = `초고속 병렬 AI 추출 진행률: ${completedCount} / ${totalPages} 페이지 완료 (${pct}%)`;
             }
-          }));
-        }
 
-        // Merge all pages' siteMetadata and riskItems in page order
-        const combinedMeta = {
-          monthWeek: '',
-          siteName: '',
-          meetingDate: '',
-          workType: '',
-          workPeriod: '',
-          author: '',
-          siteManager: ''
+            // Stream recognized rows immediately to the Editor screen so demo viewers see instant results in ~2 seconds!
+            populateEditorView(buildMergedPayload());
+            if (!hasSwitchedToLiveEditor && totalPages > 1) {
+              hasSwitchedToLiveEditor = true;
+              switchTab('editor');
+              showToast(`⚡ 1차 인식 결과 즉시 표시! 나머지 페이지 실시간 추가 중 (${completedCount}/${totalPages})...`, 'success');
+            }
+          }
         };
-        let combinedRiskItems = [];
 
-        pageResults.forEach((pageData, idx) => {
-          const pNum = idx + 1;
-          if (!pageData) return;
-          if (pageData.ocr?.provider) mainProvider = pageData.ocr.provider;
-          totalConfidence += pageData.ocr?.confidenceScore || 0.98;
-          if (pageData.ocr?.rawText) {
-            combinedRawText += `\n--- 페이지 ${pNum} ---\n` + pageData.ocr.rawText + '\n';
-          }
-
-          const structured = pageData.structured || {};
-          const sm = structured.siteMetadata || {};
-          if (!combinedMeta.monthWeek && sm.monthWeek) combinedMeta.monthWeek = sm.monthWeek;
-          if (!combinedMeta.siteName && sm.siteName) combinedMeta.siteName = sm.siteName;
-          if (!combinedMeta.meetingDate && sm.meetingDate) combinedMeta.meetingDate = sm.meetingDate;
-          if (!combinedMeta.workType && sm.workType) combinedMeta.workType = sm.workType;
-          if (!combinedMeta.workPeriod && sm.workPeriod) combinedMeta.workPeriod = sm.workPeriod;
-          if (!combinedMeta.author && sm.author) combinedMeta.author = sm.author;
-          if (!combinedMeta.siteManager && sm.siteManager) combinedMeta.siteManager = sm.siteManager;
-
-          if (Array.isArray(structured.riskItems)) {
-            const itemsWithPage = structured.riskItems.map(item => ({
-              ...item,
-              pageNumber: pNum,
-              workType: item.workType || sm.workType || '',
-              author: item.author || sm.author || ''
-            }));
-            combinedRiskItems = combinedRiskItems.concat(itemsWithPage);
-          }
-        });
+        await Promise.all(Array.from({ length: concurrency }, () => runWorker()));
 
         showUploadProgress(false);
-        showToast(`PDF 총 ${totalPages}페이지 1:1 AI 정밀 추출 완료!`, 'success');
-
-        populateEditorView({
-          fileInfo: {
-            originalName: file.name,
-            filename: file.name,
-            fileUrl: localBlobUrl,
-            localBlobUrl,
-            isPdf: true,
-            pageCount: totalPages,
-            imageUrls: pageBlobUrls
-          },
-          ocr: {
-            provider: mainProvider,
-            confidenceScore: totalConfidence / Math.max(1, totalPages),
-            rawText: combinedRawText.trim(),
-            blocks: []
-          },
-          structured: {
-            isSupportedFormat: true,
-            siteMetadata: combinedMeta,
-            riskItems: combinedRiskItems
-          }
-        });
-        switchTab('editor');
+        populateEditorView(buildMergedPayload());
+        if (!hasSwitchedToLiveEditor) {
+          switchTab('editor');
+        }
+        showToast(`✅ PDF 총 ${totalPages}페이지 초고속 전수 추출 완료!`, 'success');
         return;
       } catch (pdfErr) {
         showUploadProgress(false);
