@@ -16,7 +16,7 @@ class OcrService {
     console.log(`[OCR Service] Starting extraction for file: ${imagePath}`);
     const provider = config.ocrProvider.toLowerCase();
 
-    if ((provider === 'google' || provider === 'auto') && config.googleVisionApiKey) {
+    if ((provider === 'google' || provider === 'gemini' || provider === 'auto') && config.googleVisionApiKey) {
       try {
         console.log('[OCR Service] Executing Google Cloud Vision API...');
         return await this.extractWithGoogleVision(imagePath);

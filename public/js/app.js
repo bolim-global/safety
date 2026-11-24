@@ -133,18 +133,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Render one PDF page to a high-resolution JPEG File in the browser using PDF.js
+   * Render one PDF page to a compressed JPEG File (< 1.5MB) using PDF.js when a single page exceeds 3.5MB
    */
   async function renderPdfPageToJpegFile(pdfDoc, pageNum, baseName) {
     const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 2.0 });
+    const baseViewport = page.getViewport({ scale: 1.0 });
+    const maxDim = 1800;
+    const scale = Math.min(2.0, maxDim / Math.max(baseViewport.width, baseViewport.height, 1));
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport }).promise;
 
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    let quality = 0.8;
+    let blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    while (blob && blob.size > 3.0 * 1024 * 1024 && quality > 0.4) {
+      quality -= 0.15;
+      blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    }
     const pageFileName = `${baseName}_p${pageNum}.jpg`;
     return {
       file: new File([blob], pageFileName, { type: 'image/jpeg' }),
@@ -161,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return JSON.parse(text);
     } catch (e) {
       if (response.status === 413 || text.includes('Request Entity Too Large')) {
-        throw new Error('파일 용량이 서버 단일 요청 한도(4.5MB)를 초과했습니다.');
+        throw new Error('파일 용량이 서버 단일 요청 한도(4.5MB)를 초과했습니다. (페이지를 새로고침 Ctrl+F5 후 다시 시도해주세요)');
       }
       if (response.status === 504 || text.includes('FUNCTION_INVOCATION_TIMEOUT')) {
         throw new Error('AI 분석 시간이 서버 제한 시간을 초과했습니다.');
@@ -172,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Uploads file to backend API pipeline (POST /api/assessments/upload)
-   * Automatically splits PDF pages in the browser so large PDFs never hit Vercel's 4.5MB request limit or function timeout.
+   * Uses self-hosted PDFLib (and PDF.js fallback) to split PDFs per-page in the browser so every request is ~500KB.
    */
   async function handleFileUpload(file) {
     showUploadProgress(true);
@@ -182,25 +190,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressSubtext = document.getElementById('progress-subtext');
 
     if (progressStatusText) {
-      progressStatusText.innerText = '📄 파일 업로드 및 이미지 고화질 변환 준비 중...';
+      progressStatusText.innerText = '📄 파일 업로드 및 페이지 분할 준비 중...';
     }
     if (progressFill) progressFill.style.width = '5%';
 
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     const localBlobUrl = URL.createObjectURL(file);
     loadedPdfDoc = null;
+    const pdfjsApi = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
 
-    // Client-side per-page PDF pipeline (prevents Vercel 4.5MB 413 Request Entity Too Large & serverless timeouts)
-    if (isPdf && window.pdfjsLib) {
+    // Client-side per-page PDF pipeline using self-hosted PDFLib (0% CDN dependency) or PDF.js
+    if (isPdf && (window.PDFLib || pdfjsApi)) {
       try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        const pdfDoc = await pdfjsLib.getDocument(localBlobUrl).promise;
-        loadedPdfDoc = pdfDoc;
-        const totalPages = pdfDoc.numPages;
         const baseName = file.name.replace(/\.pdf$/i, '');
+        const arrayBuffer = await file.arrayBuffer();
+        let totalPages = 1;
+        let srcPdfLibDoc = null;
+        let pdfJsDoc = null;
+
+        if (window.PDFLib && window.PDFLib.PDFDocument) {
+          srcPdfLibDoc = await window.PDFLib.PDFDocument.load(arrayBuffer);
+          totalPages = srcPdfLibDoc.getPageCount();
+        }
+        if (pdfjsApi) {
+          pdfjsApi.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          try {
+            pdfJsDoc = await pdfjsApi.getDocument({ data: arrayBuffer.slice(0) }).promise;
+            loadedPdfDoc = pdfJsDoc;
+            if (!srcPdfLibDoc) totalPages = pdfJsDoc.numPages;
+          } catch (workerErr) {
+            console.warn('[PDF.js Preview Init Warning]', workerErr);
+          }
+        }
 
         if (progressStatusText) {
-          progressStatusText.innerText = `⚡ PDF 총 ${totalPages}페이지 고해상도 분할 완료 ➔ AI 병렬 정밀 분석 시작...`;
+          progressStatusText.innerText = `⚡ PDF 총 ${totalPages}페이지 분할 완료 ➔ AI 병렬 정밀 분석 시작...`;
         }
         if (progressSubtext) {
           progressSubtext.innerText = `개별 페이지 1:1 AI 추출 진행률: 0 / ${totalPages} 페이지 완료 (5%)`;
@@ -213,21 +237,46 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalConfidence = 0;
         let combinedRawText = '';
 
-        // Process 2 pages concurrently so each request is ~400KB and finishes in ~3s
+        // Process 2 pages concurrently so each request is ~500KB and finishes in ~3s
         const concurrency = 2;
         for (let i = 0; i < totalPages; i += concurrency) {
+          if (i > 0) await new Promise(r => setTimeout(r, 150));
           const batchPageNums = [];
           for (let j = i; j < Math.min(i + concurrency, totalPages); j++) {
             batchPageNums.push(j + 1);
           }
 
           await Promise.all(batchPageNums.map(async (pageNum) => {
-            const { file: pageJpegFile, blobUrl } = await renderPdfPageToJpegFile(pdfDoc, pageNum, baseName);
-            pageBlobUrls[pageNum - 1] = blobUrl;
+            let pageUploadFile = null;
+
+            // 1st choice: Lossless 1-page PDF split via self-hosted PDFLib (~500KB per page)
+            if (srcPdfLibDoc) {
+              const subDoc = await window.PDFLib.PDFDocument.create();
+              const [copiedPage] = await subDoc.copyPages(srcPdfLibDoc, [pageNum - 1]);
+              subDoc.addPage(copiedPage);
+              const subBytes = await subDoc.save();
+
+              if (subBytes.byteLength <= 3.5 * 1024 * 1024) {
+                const subBlob = new Blob([subBytes], { type: 'application/pdf' });
+                pageUploadFile = new File([subBlob], `${baseName}_p${pageNum}.pdf`, { type: 'application/pdf' });
+                pageBlobUrls[pageNum - 1] = URL.createObjectURL(subBlob);
+              }
+            }
+
+            // 2nd choice (if single PDF page > 3.5MB or PDFLib unavailable): compressed JPEG via PDF.js
+            if (!pageUploadFile && pdfJsDoc) {
+              const rendered = await renderPdfPageToJpegFile(pdfJsDoc, pageNum, baseName);
+              pageUploadFile = rendered.file;
+              pageBlobUrls[pageNum - 1] = rendered.blobUrl;
+            }
+
+            if (!pageUploadFile) {
+              throw new Error(`${pageNum}페이지 분할에 실패했습니다.`);
+            }
 
             const pageJobId = `job_${Date.now()}_p${pageNum}`;
             const pageFormData = new FormData();
-            pageFormData.append('file', pageJpegFile);
+            pageFormData.append('file', pageUploadFile);
             pageFormData.append('jobId', pageJobId);
 
             const response = await fetch('/api/assessments/upload', {
