@@ -102,7 +102,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
               return { pageNum, pageData };
             } catch (err) {
               console.error(`[Upload Pipeline] Page ${pageNum} extraction error:`, err.message);
-              if (err.message === 'GEMINI_DAILY_QUOTA_EXHAUSTED') {
+              if (err.message === 'GEMINI_DAILY_QUOTA_EXHAUSTED' || totalPages === 1) {
                 throw err;
               }
               return { pageNum, pageData: null };
@@ -196,7 +196,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
           }
         }
       } catch (geminiErr) {
-        console.warn('[Upload Pipeline] Gemini Multimodal Engine failed, falling back:', geminiErr.message);
+        console.warn('[Upload Pipeline] Gemini Multimodal Engine failed:', geminiErr.message);
+        if (config.ocrProvider && config.ocrProvider.toLowerCase() === 'gemini' && geminiErr.message !== 'GEMINI_DAILY_QUOTA_EXHAUSTED') {
+          return res.status(503).json({
+            success: false,
+            error: `AI 정밀 분석 서버 일시 혼잡 (자동 재시도 대상): ${geminiErr.message}`
+          });
+        }
         if (geminiErr.message === 'GEMINI_DAILY_QUOTA_EXHAUSTED') {
           progressStore[jobId] = {
             total: fileMetadata.pageCount,
