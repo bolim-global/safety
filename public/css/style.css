@@ -914,3 +914,539 @@ textarea.table-input:focus {
 .modal-overlay.hidden {
   display: none !important;
 }
+
+/* ==========================================================================
+   EXECUTIVE CEO SAFETY ANALYTICS DASHBOARD STYLES
+   ========================================================================== */
+.exec-hero-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #1e3a8a 100%);
+  border-radius: 16px;
+  padding: 28px 32px;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+  margin-bottom: 22px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.exec-hero-left {
+  flex: 1.15;
+}
+
+.exec-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+
+.exec-hero-left h2 {
+  font-size: 23px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 10px;
+  letter-spacing: -0.3px;
+}
+
+.exec-hero-left p {
+  font-size: 14px;
+  color: #cbd5e1;
+  line-height: 1.65;
+}
+
+.exec-hero-right {
+  flex: 1.35;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.exec-main-counter-box {
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.35), rgba(14, 165, 233, 0.18));
+  border: 1.5px solid rgba(96, 165, 250, 0.55);
+  border-radius: 14px;
+  padding: 18px 22px;
+  min-width: 235px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.exec-counter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #bae6fd;
+  margin-bottom: 4px;
+}
+
+.exec-counter-number {
+  font-size: 42px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1.1;
+  letter-spacing: -1px;
+}
+
+.exec-counter-number small {
+  font-size: 20px;
+  font-weight: 700;
+  color: #38bdf8;
+  margin-left: 4px;
+}
+
+.exec-counter-sub {
+  font-size: 11.5px;
+  color: #e0f2fe;
+  margin-top: 6px;
+  opacity: 0.9;
+}
+
+.exec-mini-counters {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.exec-mini-box {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  padding: 14px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.exec-mini-box .mini-label {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.exec-mini-box strong {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.exec-mini-box small {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.text-emerald { color: #34d399 !important; font-weight: 600; }
+.text-amber { color: #fbbf24 !important; font-weight: 600; }
+
+/* Month Filter Bar */
+.exec-month-bar {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.exec-month-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.month-bar-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.month-bar-label i {
+  color: var(--primary);
+}
+
+.month-pills-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.month-pill {
+  padding: 7px 15px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.month-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #eff6ff;
+}
+
+.month-pill.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.28);
+}
+
+.exec-month-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.kpi-subtext {
+  display: block;
+  font-size: 11.5px;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.kpi-text-val {
+  font-size: 18px !important;
+  line-height: 1.25;
+  margin-top: 2px;
+}
+
+/* Pie / Doughnut Charts Grid */
+.exec-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 4px;
+}
+
+.pie-layout {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 230px;
+}
+
+.pie-svg-wrap {
+  width: 210px;
+  height: 210px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pie-slice {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  transform-origin: center;
+  cursor: pointer;
+}
+
+.pie-slice:hover {
+  transform: scale(1.04);
+  opacity: 0.92;
+}
+
+.pie-legend-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pie-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+
+.pie-legend-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pie-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.pie-legend-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pie-count-text {
+  font-size: 12.5px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.pie-pct-badge {
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Ranking Cards Grid */
+.exec-ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.exec-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exec-rank-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exec-rank-item:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.exec-rank-item.high-danger {
+  background: #fffafa;
+  border-color: #fecaca;
+  border-left: 4px solid #ef4444;
+}
+
+.exec-rank-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.exec-rank-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rank-medal {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.rank-medal.rank-1 { background: #f59e0b; color: #ffffff; }
+.rank-medal.rank-2 { background: #64748b; color: #ffffff; }
+.rank-medal.rank-3 { background: #b45309; color: #ffffff; }
+.rank-medal.rank-red { background: #ef4444; color: #ffffff; }
+
+.exec-rank-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.4;
+}
+
+.exec-rank-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.exec-mini-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.exec-mini-tag.hazard {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.exec-mini-tag.loc {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.exec-rank-bar-bg {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.exec-rank-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2563eb, #06b6d4);
+}
+
+.exec-rank-bar-fill.danger {
+  background: linear-gradient(90deg, #ef4444, #f97316);
+}
+
+.exec-rank-measure {
+  font-size: 12px;
+  color: #047857;
+  background: #ecfdf5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: 600;
+}
+
+/* Monthly Trend Vertical Bar Chart */
+.monthly-trend-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 16px;
+  height: 210px;
+  padding: 24px 16px 8px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.trend-col {
+  flex: 1;
+  max-width: 130px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.trend-col:hover, .trend-col.active {
+  background: #eff6ff;
+}
+
+.trend-top-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.trend-sheet-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.trend-high-val {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #dc2626;
+  background: #fee2e2;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.trend-bar-track {
+  width: 44px;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.trend-bar-fill {
+  width: 100%;
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  border-radius: 8px 8px 3px 3px;
+  min-height: 12px;
+  transition: height 0.35s ease;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
+.trend-col.active .trend-bar-fill {
+  background: linear-gradient(180deg, #0ea5e9 0%, #2563eb 100%);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.45);
+}
+
+.trend-month-label {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+}
+
+@media (max-width: 1200px) {
+  .exec-hero-banner { flex-direction: column; align-items: stretch; }
+  .exec-charts-grid, .exec-ranking-grid { grid-template-columns: 1fr; }
+}

@@ -55,13 +55,14 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing siteMetadata or riskItems.' });
     }
 
+    const serializedStructured = JSON.stringify({ siteMetadata, riskItems });
     const createdAssessment = await prisma.assessment.create({
       data: {
         siteName: siteMetadata.siteName || '미지정 현장',
         assessmentDate: siteMetadata.assessmentDate || new Date().toISOString().split('T')[0],
         assessor: siteMetadata.assessor || (riskItems && riskItems[0] && riskItems[0].author) || '미지정 작성자',
         workType: siteMetadata.workType || (riskItems && riskItems[0] && riskItems[0].workType) || '건설공종',
-        rawOcrText: rawOcrText || '',
+        rawOcrText: serializedStructured || rawOcrText || '',
         pdfFilename: pdfFilename || '',
         status: 'VERIFIED',
         riskItems: {
@@ -121,13 +122,14 @@ router.post('/single-item', async (req, res) => {
     const itemSiteName = siteMetadata?.siteName || '위험성평가 현장';
     const itemDate = siteMetadata?.assessmentDate || new Date().toISOString().split('T')[0];
 
+    const serializedSingle = JSON.stringify({ siteMetadata, riskItems: [riskItem] });
     const createdAssessment = await prisma.assessment.create({
       data: {
         siteName: itemSiteName,
         assessmentDate: itemDate,
         assessor: itemAuthor,
         workType: itemWorkType,
-        rawOcrText: rawOcrText || '',
+        rawOcrText: serializedSingle || rawOcrText || '',
         pdfFilename: pdfFilename || '',
         status: 'VERIFIED',
         riskItems: {

@@ -1194,10 +1194,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- ANALYTICS DASHBOARD ---
-  async function loadAnalyticsData() {
+  // --- EXECUTIVE ANALYTICS DASHBOARD ---
+  let selectedAnalyticsMonth = 'ALL';
+
+  const PIE_PALETTE_HAZARD = ['#ef4444', '#f97316', '#f59e0b', '#8b5cf6', '#06b6d4', '#10b981', '#64748b'];
+  const PIE_PALETTE_WORK = ['#2563eb', '#0ea5e9', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
+
+  async function loadAnalyticsData(month = selectedAnalyticsMonth) {
+    selectedAnalyticsMonth = month || 'ALL';
     try {
-      const response = await fetch('/api/analytics/preventive-risks');
+      const response = await fetch(`/api/analytics/preventive-risks?month=${encodeURIComponent(selectedAnalyticsMonth)}`);
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -1208,104 +1214,348 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderAnalyticsView(data) {
-    const s = data.summary;
-    document.getElementById('stat-total-assessments').textContent = s.totalAssessments || 0;
-    document.getElementById('stat-total-risks').textContent = s.totalRiskItems || 0;
-    document.getElementById('stat-high-risks').textContent = s.highRiskCount || 0;
-    document.getElementById('stat-high-ratio').textContent = `${s.highRiskRatioPercent || 0}%`;
+  /**
+   * Renders a crisp SVG Doughnut Chart + Ranked Percentage Legend
+   */
+  function renderDoughnutChart(svgContainerId, legendContainerId, items, palette, centerSubLabel) {
+    const svgWrap = document.getElementById(svgContainerId);
+    const legendWrap = document.getElementById(legendContainerId);
+    if (!svgWrap || !legendWrap) return;
 
-    // High Risk Alerts Banner
-    const alertList = document.getElementById('high-risk-alert-list');
-    alertList.innerHTML = '';
-    if (data.highRiskAlerts && data.highRiskAlerts.length > 0) {
-      data.highRiskAlerts.forEach(alert => {
-        const div = document.createElement('div');
-        div.className = 'alert-item';
-        div.innerHTML = `
-          <div>
-            <div class="alert-item-title">[${escapeHtml(alert.workType)}] ${escapeHtml(alert.siteName)} - ${escapeHtml(alert.locationEquipment)}</div>
-            <div class="alert-item-desc">⚠️ 위험요인: ${escapeHtml(alert.riskFactor)} (위험성: ${alert.riskGrade})</div>
-          </div>
-          <div>
-            <span class="badge badge-danger">조치: ${escapeHtml(alert.safetyMeasure.substring(0, 30))}...</span>
-          </div>
-        `;
-        alertList.appendChild(div);
-      });
-    } else {
-      alertList.innerHTML = '<div class="alert-item"><div class="alert-item-title">현재 감지된 고위험(상) 항목이 없습니다.</div></div>';
+    const total = (items || []).reduce((acc, it) => acc + (it.count || 0), 0);
+    if (!items || items.length === 0 || total === 0) {
+      svgWrap.innerHTML = `
+        <div style="text-align:center; color:#94a3b8; font-size:13px;">
+          <i class="fa-solid fa-chart-pie" style="font-size:36px; margin-bottom:8px; display:block;"></i>
+          집계 데이터 없음
+        </div>`;
+      legendWrap.innerHTML = '<div style="color:#94a3b8; font-size:13px;">저장된 위험성평가 데이터가 없습니다.</div>';
+      return;
     }
 
-    // Top Recurring Risks
-    const recurringContainer = document.getElementById('top-recurring-risks-container');
-    recurringContainer.innerHTML = '';
-    (data.topRecurringRisks || []).forEach((item, i) => {
-      const card = document.createElement('div');
-      card.className = 'recurring-risk-card';
-      card.innerHTML = `
-        <div class="recurring-risk-header">
-          <span>#${i + 1} [${escapeHtml(item.workType)}] ${escapeHtml(item.riskFactor)}</span>
-          <span class="badge badge-danger">빈출 ${item.count}회</span>
-        </div>
-        <div style="font-size: 12px; color: #64748b;">📍 위치/장비: ${escapeHtml((item.locations || []).join(', '))}</div>
-        <div class="recurring-risk-measures">💡 권장 예방대책: ${escapeHtml((item.recommendedMeasures || []).join(' / '))}</div>
-      `;
-      recurringContainer.appendChild(card);
+    // Group top 6 slices + 기타
+    let displayItems = items.slice(0, 6);
+    if (items.length > 6) {
+      const restCount = items.slice(6).reduce((a, b) => a + b.count, 0);
+      displayItems.push({
+        label: '기타 공종/유형',
+        count: restCount,
+        percent: Math.max(1, Math.round((restCount / total) * 100))
+      });
+    }
+
+    const size = 200;
+    const cx = size / 2;
+    const cy = size / 2;
+    const outerR = 86;
+    const innerR = 52;
+
+    let cumulativeAngle = -Math.PI / 2;
+    let pathsHtml = '';
+
+    displayItems.forEach((item, idx) => {
+      const color = palette[idx % palette.length];
+      const fraction = item.count / total;
+      const sliceAngle = fraction * Math.PI * 2;
+
+      if (fraction >= 0.999) {
+        // Full 100% circle ring
+        pathsHtml += `
+          <circle cx="${cx}" cy="${cy}" r="${(outerR + innerR) / 2}" fill="none"
+            stroke="${color}" stroke-width="${outerR - innerR}" class="pie-slice">
+            <title>${escapeHtml(item.label)}: ${item.count}건 (100%)</title>
+          </circle>`;
+      } else if (fraction > 0) {
+        const startAngle = cumulativeAngle;
+        const endAngle = cumulativeAngle + sliceAngle;
+        cumulativeAngle = endAngle;
+
+        const x1 = cx + outerR * Math.cos(startAngle);
+        const y1 = cy + outerR * Math.sin(startAngle);
+        const x2 = cx + outerR * Math.cos(endAngle);
+        const y2 = cy + outerR * Math.sin(endAngle);
+
+        const x3 = cx + innerR * Math.cos(endAngle);
+        const y3 = cy + innerR * Math.sin(endAngle);
+        const x4 = cx + innerR * Math.cos(startAngle);
+        const y4 = cy + innerR * Math.sin(startAngle);
+
+        const largeArc = sliceAngle > Math.PI ? 1 : 0;
+        const d = [
+          `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+          `A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+          `L ${x3.toFixed(2)} ${y3.toFixed(2)}`,
+          `A ${innerR} ${innerR} 0 ${largeArc} 0 ${x4.toFixed(2)} ${y4.toFixed(2)}`,
+          'Z'
+        ].join(' ');
+
+        const pct = Math.round(fraction * 100);
+        pathsHtml += `
+          <path d="${d}" fill="${color}" stroke="#ffffff" stroke-width="2" class="pie-slice">
+            <title>${escapeHtml(item.label)}: ${item.count}건 (${pct}%)</title>
+          </path>`;
+      }
     });
 
-    // Work Type Bars
-    const barsContainer = document.getElementById('worktype-bars-container');
-    barsContainer.innerHTML = '';
-    const maxRisks = Math.max(...(data.workTypeDistribution || []).map(w => w.totalRisks), 1);
+    svgWrap.innerHTML = `
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        ${pathsHtml}
+        <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="22" font-weight="800" fill="#0f172a">${total}건</text>
+        <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">${escapeHtml(centerSubLabel)}</text>
+      </svg>
+    `;
 
-    (data.workTypeDistribution || []).forEach(w => {
-      const pct = Math.round((w.totalRisks / maxRisks) * 100);
-      const div = document.createElement('div');
-      div.className = 'worktype-row';
-      div.innerHTML = `
-        <div class="worktype-label">
-          <span>${escapeHtml(w.workType)}</span>
-          <span>총 ${w.totalRisks}건 (고위험 ${w.highRisks}건)</span>
-        </div>
-        <div class="worktype-bar-bg">
-          <div class="worktype-bar-fill" style="width: ${pct}%;"></div>
+    legendWrap.innerHTML = displayItems.map((item, idx) => {
+      const color = palette[idx % palette.length];
+      const pct = Math.round((item.count / total) * 100);
+      const highNote = item.highRisks ? ` <span style="color:#dc2626; font-size:11px;">(고위험 ${item.highRisks})</span>` : '';
+      return `
+        <div class="pie-legend-item">
+          <div class="pie-legend-left">
+            <span class="pie-color-dot" style="background:${color};"></span>
+            <span>${escapeHtml(item.label)}${highNote}</span>
+          </div>
+          <div class="pie-legend-right">
+            <span class="pie-count-text">${item.count}건</span>
+            <span class="pie-pct-badge" style="background:${color};">${pct}%</span>
+          </div>
         </div>
       `;
-      barsContainer.appendChild(div);
-    });
-
-    // Proactive Guidelines Cards
-    const guidelinesContainer = document.getElementById('proactive-guidelines-container');
-    guidelinesContainer.innerHTML = '';
-    (data.proactiveGuidelines || []).forEach(g => {
-      const card = document.createElement('div');
-      card.className = 'guideline-card';
-      card.innerHTML = `
-        <span class="badge badge-info">${escapeHtml(g.category)}</span>
-        <h4>${escapeHtml(g.title)}</h4>
-        <p>${escapeHtml(g.description)}</p>
-        <ul class="guideline-checklist">
-          ${(g.actionItems || []).map(act => `<li><i class="fa-solid fa-square-check"></i> ${escapeHtml(act)}</li>`).join('')}
-        </ul>
-      `;
-      guidelinesContainer.appendChild(card);
-    });
+    }).join('');
   }
 
-  // --- SEED SAMPLE DATA ---
+  function renderAnalyticsView(data) {
+    selectedAnalyticsMonth = data.activeMonth || 'ALL';
+    const exec = data.executiveTotals || {};
+    const s = data.summary || {};
+
+    // 1. Top CEO Hero Showcase Banner (Cumulative DB Metrics)
+    const totalSheetsEl = document.getElementById('exec-total-sheets');
+    const totalDocsEl = document.getElementById('exec-total-docs');
+    const totalItemsEl = document.getElementById('exec-total-items');
+    const totalHighEl = document.getElementById('exec-total-high');
+    const learnedVocabEl = document.getElementById('exec-learned-vocab');
+    const activeSitesEl = document.getElementById('exec-active-sites');
+    const briefingTextEl = document.getElementById('exec-ai-briefing-text');
+
+    const totalSheets = exec.totalAccumulatedSheets || 0;
+    const totalItems = exec.totalRiskItems || 0;
+    const totalHigh = exec.totalHighRiskResolved || 0;
+    const sitesCount = exec.activeSitesCount || 0;
+
+    if (totalSheetsEl) totalSheetsEl.textContent = totalSheets.toLocaleString();
+    if (totalDocsEl) {
+      const momBadge = exec.momGrowthPercent !== null && exec.momGrowthPercent !== undefined && exec.momGrowthPercent >= 0
+        ? ` · 전월 대비 +${exec.momGrowthPercent}% 증가`
+        : '';
+      totalDocsEl.textContent = `누적 문서 ${exec.totalAssessmentDocs || 0}건 디지털 자산화${momBadge}`;
+    }
+    if (totalItemsEl) totalItemsEl.textContent = `${totalItems.toLocaleString()}건`;
+    if (totalHighEl) totalHighEl.textContent = `${totalHigh.toLocaleString()}건`;
+    if (learnedVocabEl) learnedVocabEl.textContent = `${(exec.learnedVocabCount || 0).toLocaleString()}개`;
+    if (activeSitesEl) activeSitesEl.textContent = `${sitesCount}개 주요 현장 통합 관제 중`;
+
+    if (briefingTextEl) {
+      briefingTextEl.innerHTML =
+        `현재까지 총 <strong style="color:#38bdf8;">${totalSheets.toLocaleString()}장</strong>의 수기 안전위험성평가표가 AI 빅데이터 DB에 축적되었으며, ` +
+        `발굴된 <strong style="color:#fbbf24;">${totalItems.toLocaleString()}건</strong>의 위험요인(고위험 <strong style="color:#f87171;">${totalHigh.toLocaleString()}건</strong> 포함) 전수에 대해 ` +
+        `<strong style="color:#34d399;">100% 사전 안전대책 수립 및 TBM 현장 점검</strong>이 이행되고 있습니다.`;
+    }
+
+    // 2. Month Filter Pills
+    const pillsWrap = document.getElementById('analytics-month-pills');
+    if (pillsWrap) {
+      const months = data.availableMonths || [];
+      let pillsHtml = `<button class="month-pill ${selectedAnalyticsMonth === 'ALL' ? 'active' : ''}" data-month="ALL">전체 누적 (${totalSheets}장)</button>`;
+      months.forEach(m => {
+        const isActive = selectedAnalyticsMonth === m.yearMonth ? 'active' : '';
+        pillsHtml += `<button class="month-pill ${isActive}" data-month="${escapeHtml(m.yearMonth)}">${escapeHtml(m.label)} (${m.sheetsCount}장)</button>`;
+      });
+      pillsWrap.innerHTML = pillsHtml;
+
+      pillsWrap.querySelectorAll('.month-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          loadAnalyticsData(btn.getAttribute('data-month'));
+        });
+      });
+    }
+
+    // 3. Period KPI Cards
+    const periodLabel = data.activeMonthLabel || '전체 누적 기간';
+    const kpiPeriodLabelEl = document.getElementById('kpi-period-sheets-label');
+    if (kpiPeriodLabelEl) kpiPeriodLabelEl.textContent = `[${periodLabel}] 분석 평가표`;
+
+    document.getElementById('stat-total-assessments').textContent = `${(s.periodSheets || 0).toLocaleString()}장`;
+    document.getElementById('stat-total-risks').textContent = `세부 위험요인 ${(s.totalRiskItems || 0).toLocaleString()}건 정밀 분석`;
+    document.getElementById('stat-high-risks').textContent = `${(s.highRiskCount || 0).toLocaleString()}건`;
+    document.getElementById('stat-high-ratio').textContent = `위험 비중 ${s.highRiskRatioPercent || 0}% · 100% 사전 조치`;
+
+    const topHazardEl = document.getElementById('stat-top-hazard');
+    const topHazardPctEl = document.getElementById('stat-top-hazard-pct');
+    if (topHazardEl) topHazardEl.textContent = s.topHazardName || '-';
+    if (topHazardPctEl) topHazardPctEl.textContent = `점유율 ${s.topHazardPercent || 0}% · 최우선 차단 대상`;
+
+    const topWorkEl = document.getElementById('stat-top-worktype');
+    const topWorkPctEl = document.getElementById('stat-top-worktype-pct');
+    if (topWorkEl) topWorkEl.textContent = s.topWorkTypeName || '-';
+    if (topWorkPctEl) topWorkPctEl.textContent = `점유율 ${s.topWorkTypePercent || 0}% · 중점 안전점검 공종`;
+
+    const hazardBadge = document.getElementById('hazard-chart-badge');
+    if (hazardBadge) hazardBadge.textContent = periodLabel;
+    const workBadge = document.getElementById('worktype-chart-badge');
+    if (workBadge) workBadge.textContent = periodLabel;
+
+    // 4. Render Pie / Doughnut Charts
+    renderDoughnutChart(
+      'hazard-pie-container',
+      'hazard-pie-legend',
+      data.hazardDistribution || [],
+      PIE_PALETTE_HAZARD,
+      '재해유형 분석'
+    );
+
+    renderDoughnutChart(
+      'worktype-pie-container',
+      'worktype-pie-legend',
+      data.workTypeDistribution || [],
+      PIE_PALETTE_WORK,
+      `${(data.workTypeDistribution || []).length}개 공종`
+    );
+
+    // 5A. Most Frequent Risk Points of the Selected Month/Period
+    const topHeading = document.getElementById('top-risk-points-heading');
+    if (topHeading) {
+      topHeading.innerHTML = `<i class="fa-solid fa-fire-flame-curved" style="color: #f59e0b;"></i> [${escapeHtml(periodLabel)}] 가장 많이 나온 위험포인트 TOP 5`;
+    }
+
+    const recurringContainer = document.getElementById('top-recurring-risks-container');
+    if (recurringContainer) {
+      const points = (data.topRiskPoints || []).slice(0, 5);
+      if (points.length === 0) {
+        recurringContainer.innerHTML = '<div style="padding:24px; text-align:center; color:#94a3b8;">해당 기간에 분석된 위험포인트가 없습니다.</div>';
+      } else {
+        const maxCount = Math.max(...points.map(p => p.count), 1);
+        recurringContainer.innerHTML = points.map((p, idx) => {
+          const barW = Math.max(12, Math.round((p.count / maxCount) * 100));
+          const medalClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : '';
+          return `
+            <div class="exec-rank-item">
+              <div class="exec-rank-top">
+                <div class="exec-rank-title-wrap">
+                  <span class="rank-medal ${medalClass}">${p.rank}위</span>
+                  <span class="exec-rank-title">${escapeHtml(p.title)}</span>
+                </div>
+                <span class="badge badge-primary" style="background:#1e40af; color:#fff; white-space:nowrap;">${p.count}회 (${p.percent}%)</span>
+              </div>
+              <div class="exec-rank-tags">
+                ${(p.workTypes || []).map(wt => `<span class="exec-mini-tag">${escapeHtml(wt)}</span>`).join('')}
+                <span class="exec-mini-tag hazard">${escapeHtml(p.hazardType)}</span>
+                ${(p.locations || []).slice(0, 2).map(loc => `<span class="exec-mini-tag loc">📍 ${escapeHtml(loc)}</span>`).join('')}
+              </div>
+              <div class="exec-rank-bar-bg">
+                <div class="exec-rank-bar-fill" style="width:${barW}%;"></div>
+              </div>
+              <div class="exec-rank-measure">✔ 핵심 대책: ${escapeHtml(p.shortMeasure)}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 5B. High-Risk (상 등급) Frequency Ranking TOP 5
+    const alertList = document.getElementById('high-risk-alert-list');
+    if (alertList) {
+      const highPoints = (data.topHighRiskPoints || []).slice(0, 5);
+      if (highPoints.length === 0) {
+        alertList.innerHTML = '<div style="padding:24px; text-align:center; color:#10b981; font-weight:600;">해당 기간에 고위험(상 등급) 지적 항목이 없습니다.</div>';
+      } else {
+        const maxHigh = Math.max(...highPoints.map(p => p.highCount), 1);
+        alertList.innerHTML = highPoints.map(p => {
+          const barW = Math.max(15, Math.round((p.highCount / maxHigh) * 100));
+          return `
+            <div class="exec-rank-item high-danger">
+              <div class="exec-rank-top">
+                <div class="exec-rank-title-wrap">
+                  <span class="rank-medal rank-red">${p.rank}위</span>
+                  <span class="exec-rank-title">${escapeHtml(p.title)}</span>
+                </div>
+                <span class="badge badge-danger" style="white-space:nowrap;">고위험 ${p.highCount}회</span>
+              </div>
+              <div class="exec-rank-tags">
+                <span class="exec-mini-tag">${escapeHtml(p.workType)}</span>
+                <span class="exec-mini-tag hazard">${escapeHtml(p.hazardType)}</span>
+                ${(p.locations || []).slice(0, 2).map(loc => `<span class="exec-mini-tag loc">📍 ${escapeHtml(loc)}</span>`).join('')}
+              </div>
+              <div class="exec-rank-bar-bg">
+                <div class="exec-rank-bar-fill danger" style="width:${barW}%;"></div>
+              </div>
+              <div class="exec-rank-measure">🛡️ 집중관리 조치: ${escapeHtml(p.shortMeasure)}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 6. Monthly Accumulation Growth Bar Chart
+    const trendContainer = document.getElementById('monthly-trend-container');
+    if (trendContainer) {
+      const trend = data.monthlyTrend || [];
+      if (trend.length === 0) {
+        trendContainer.innerHTML = '<div style="margin:auto; color:#94a3b8;">월별 축적 데이터가 아직 없습니다.</div>';
+      } else {
+        const maxSheets = Math.max(...trend.map(t => t.sheetsCount), 1);
+        trendContainer.innerHTML = trend.map(t => {
+          const heightPct = Math.max(14, Math.round((t.sheetsCount / maxSheets) * 100));
+          const isColActive = selectedAnalyticsMonth === t.yearMonth ? 'active' : '';
+          return `
+            <div class="trend-col ${isColActive}" data-month="${escapeHtml(t.yearMonth)}" title="${escapeHtml(t.label)} 클릭하여 상세 보기">
+              <div class="trend-top-badges">
+                <span class="trend-sheet-val">${t.sheetsCount}장</span>
+                <span class="trend-high-val">고위험 ${t.highRiskCount}건</span>
+              </div>
+              <div class="trend-bar-track">
+                <div class="trend-bar-fill" style="height:${heightPct}%;"></div>
+              </div>
+              <div class="trend-month-label">${escapeHtml(t.label)}</div>
+            </div>
+          `;
+        }).join('');
+
+        trendContainer.querySelectorAll('.trend-col').forEach(col => {
+          col.addEventListener('click', () => {
+            const ym = col.getAttribute('data-month');
+            loadAnalyticsData(selectedAnalyticsMonth === ym ? 'ALL' : ym);
+          });
+        });
+      }
+    }
+  }
+
+  // --- SEED SAMPLE DATA & REFRESH BUTTONS ---
   async function seedSampleData() {
     try {
       const response = await fetch('/api/analytics/seed-sample', { method: 'POST' });
       const res = await response.json();
       if (res.success) {
-        showToast('샘플 위험성평가 3건이 DB에 시딩되었습니다.', 'success');
-        loadAnalyticsData();
-        switchTab('analytics');
+        showToast(res.message || '월별 시연 데이터가 확충되었습니다!', 'success');
+        loadAnalyticsData('ALL');
       }
     } catch (err) {
-      showToast('시딩 오류: ' + err.message, 'danger');
+      showToast('데이터 확충 오류: ' + err.message, 'danger');
     }
+  }
+
+  const btnSeedExecDemo = document.getElementById('btn-seed-exec-demo');
+  if (btnSeedExecDemo) {
+    btnSeedExecDemo.addEventListener('click', () => seedSampleData());
+  }
+
+  const btnRefreshAnalytics = document.getElementById('btn-refresh-analytics');
+  if (btnRefreshAnalytics) {
+    btnRefreshAnalytics.addEventListener('click', () => {
+      loadAnalyticsData(selectedAnalyticsMonth);
+      showToast('최신 위험 예방 통계를 집계했습니다.', 'success');
+    });
   }
 
   // --- ASSESSMENT HISTORY DATABASE ---

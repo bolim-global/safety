@@ -231,81 +231,155 @@
         </div>
       </section>
 
-      <!-- TAB 3: PREVENTIVE RISK ANALYTICS DASHBOARD -->
+      <!-- TAB 3: PREVENTIVE RISK ANALYTICS DASHBOARD (EXECUTIVE CEO EDITION) -->
       <section id="analytics-section" class="tab-content">
-        <!-- Summary Stats Cards -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon blue"><i class="fa-solid fa-file-circle-check"></i></div>
-            <div class="stat-info">
-              <span class="stat-label">총 축적 평가서</span>
-              <h3 class="stat-value" id="stat-total-assessments">0</h3>
+        <!-- 1. Executive Big-Data Hero Showcase Banner -->
+        <div class="exec-hero-banner">
+          <div class="exec-hero-left">
+            <div class="exec-hero-badge">
+              <span class="pulse-dot"></span>
+              <span>CEO EXECUTIVE SAFETY BRIEFING · AI 스마트 안전보건 통합 관제</span>
+            </div>
+            <h2>전사 수기 위험성평가 AI 디지털 전환 &amp; 사전재해 예방 현황</h2>
+            <p id="exec-ai-briefing-text">
+              현장 수기 위험성평가표를 AI로 100% 디지털 데이터베이스화하여 고위험 재해 요인을 사전 차단하고 있습니다.
+            </p>
+          </div>
+          <div class="exec-hero-right">
+            <div class="exec-main-counter-box">
+              <span class="exec-counter-label"><i class="fa-solid fa-layer-group"></i> DB 누적 축적 위험성평가표</span>
+              <div class="exec-counter-number"><span id="exec-total-sheets">0</span><small>장</small></div>
+              <span class="exec-counter-sub" id="exec-total-docs">누적 등록 0건 · 수기 문서 100% 디지털 자산화</span>
+            </div>
+            <div class="exec-mini-counters">
+              <div class="exec-mini-box">
+                <span class="mini-label">누적 발굴·개선 위험요인</span>
+                <strong id="exec-total-items">0건</strong>
+                <small class="text-emerald">사전 안전대책 수립 100%</small>
+              </div>
+              <div class="exec-mini-box">
+                <span class="mini-label">고위험(Red) 사전 차단</span>
+                <strong id="exec-total-high">0건</strong>
+                <small class="text-amber">중대재해 ZERO 집중관리</small>
+              </div>
+              <div class="exec-mini-box">
+                <span class="mini-label">AI 자가학습 안전지식</span>
+                <strong id="exec-learned-vocab">0개</strong>
+                <small id="exec-active-sites">전사 현장 실시간 연동</small>
+              </div>
             </div>
           </div>
+        </div>
+
+        <!-- 2. Monthly Filter Selector Bar -->
+        <div class="exec-month-bar">
+          <div class="exec-month-left">
+            <span class="month-bar-label"><i class="fa-solid fa-calendar-days"></i> 월별 분석 기준 선택</span>
+            <div class="month-pills-wrap" id="analytics-month-pills">
+              <button class="month-pill active" data-month="ALL">전체 누적</button>
+            </div>
+          </div>
+          <div class="exec-month-actions">
+            <button class="btn btn-sm btn-outline" id="btn-seed-exec-demo" title="월별 시연용 안전평가 데이터를 추가 적재합니다">
+              <i class="fa-solid fa-database"></i> 시연 데이터 확충
+            </button>
+            <button class="btn btn-sm btn-primary" id="btn-refresh-analytics">
+              <i class="fa-solid fa-arrows-rotate"></i> 최신 집계
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Selected Month / Period KPI Summary Cards -->
+        <div class="stats-grid exec-kpi-grid">
           <div class="stat-card">
-            <div class="stat-icon yellow"><i class="fa-solid fa-list-ol"></i></div>
+            <div class="stat-icon blue"><i class="fa-solid fa-file-shield"></i></div>
             <div class="stat-info">
-              <span class="stat-label">총 위험요인 항목</span>
-              <h3 class="stat-value" id="stat-total-risks">0</h3>
+              <span class="stat-label" id="kpi-period-sheets-label">조회 기간 평가표 수</span>
+              <h3 class="stat-value" id="stat-total-assessments">0장</h3>
+              <small class="kpi-subtext" id="stat-total-risks">위험요인 0건 정밀 분석</small>
             </div>
           </div>
           <div class="stat-card red-pulse">
             <div class="stat-icon red"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <div class="stat-info">
-              <span class="stat-label">고위험 (상 등급) 항목</span>
-              <h3 class="stat-value" id="stat-high-risks">0</h3>
+              <span class="stat-label">집중관리 고위험(상 등급)</span>
+              <h3 class="stat-value" id="stat-high-risks">0건</h3>
+              <small class="kpi-subtext" id="stat-high-ratio">전체의 0% · 전수 대책 수립 완료</small>
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon green"><i class="fa-solid fa-percent"></i></div>
+            <div class="stat-icon yellow"><i class="fa-solid fa-person-falling-burst"></i></div>
             <div class="stat-info">
-              <span class="stat-label">고위험 비중</span>
-              <h3 class="stat-value" id="stat-high-ratio">0%</h3>
+              <span class="stat-label">최다 빈출 재해형태 1위</span>
+              <h3 class="stat-value kpi-text-val" id="stat-top-hazard">-</h3>
+              <small class="kpi-subtext" id="stat-top-hazard-pct">점유율 0% · 최우선 예방 대상</small>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fa-solid fa-helmet-safety"></i></div>
+            <div class="stat-info">
+              <span class="stat-label">최다 평가 주력 공종 1위</span>
+              <h3 class="stat-value kpi-text-val" id="stat-top-worktype">-</h3>
+              <small class="kpi-subtext" id="stat-top-worktype-pct">점유율 0% · 집중 안전점검 공종</small>
             </div>
           </div>
         </div>
 
-        <!-- High-Risk Alert Notification Banner -->
-        <div class="alert-banner" id="high-risk-alert-banner">
-          <div class="alert-banner-header">
-            <i class="fa-solid fa-bell alert-bell"></i>
-            <h3>실시간 고위험(Red Level) 경보 및 즉시 점검 필요 항목</h3>
+        <!-- 4. Doughnut / Pie Charts Row: Hazard Type & Work Type -->
+        <div class="exec-charts-grid">
+          <!-- Pie Chart 1: Hazard Type -->
+          <div class="card exec-chart-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-chart-pie" style="color: #ef4444;"></i> 재해형태별 위험 빈도 분포</h3>
+              <span class="badge badge-danger" id="hazard-chart-badge">원형 빈도 분석</span>
+            </div>
+            <div class="pie-layout">
+              <div class="pie-svg-wrap" id="hazard-pie-container"></div>
+              <div class="pie-legend-list" id="hazard-pie-legend"></div>
+            </div>
           </div>
-          <div class="alert-banner-list" id="high-risk-alert-list">
-            <!-- Dynamic alerts -->
+
+          <!-- Pie Chart 2: Work Type -->
+          <div class="card exec-chart-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-chart-pie" style="color: #2563eb;"></i> 작업 공종별 위험성평가 비중</h3>
+              <span class="badge badge-info" id="worktype-chart-badge">공종별 비중</span>
+            </div>
+            <div class="pie-layout">
+              <div class="pie-svg-wrap" id="worktype-pie-container"></div>
+              <div class="pie-legend-list" id="worktype-pie-legend"></div>
+            </div>
           </div>
         </div>
 
-        <div class="analytics-grid">
-          <!-- Top 5 Recurring Hazards by Work Type -->
+        <!-- 5. Top Risk Points of the Month & High-Risk Frequency Ranking -->
+        <div class="exec-ranking-grid">
+          <!-- Most Frequent Risk Points -->
           <div class="card">
             <div class="card-header">
-              <h3><i class="fa-solid fa-fire"></i> 공종별 Top 5 주요 빈출 위험요인</h3>
+              <h3 id="top-risk-points-heading"><i class="fa-solid fa-fire-flame-curved" style="color: #f59e0b;"></i> 최다 빈출 핵심 위험포인트 TOP 5</h3>
+              <span class="badge badge-warning">현장 최다 지적 항목</span>
             </div>
-            <div class="recurring-risks-list" id="top-recurring-risks-container">
-              <!-- Dynamic items -->
-            </div>
+            <div class="exec-rank-list" id="top-recurring-risks-container"></div>
           </div>
 
-          <!-- Work Type Risk Distribution -->
+          <!-- High-Risk (Red) Frequency Ranking -->
           <div class="card">
             <div class="card-header">
-              <h3><i class="fa-solid fa-chart-column"></i> 공종별 위험 요소 분포</h3>
+              <h3><i class="fa-solid fa-skull-crossbones" style="color: #ef4444;"></i> 고위험(상 등급) 다발 집중관리 TOP 5</h3>
+              <span class="badge badge-danger">중대재해 직결 요인</span>
             </div>
-            <div class="worktype-bars-container" id="worktype-bars-container">
-              <!-- Progress bars -->
-            </div>
+            <div class="exec-rank-list" id="high-risk-alert-list"></div>
           </div>
         </div>
 
-        <!-- Proactive Safety Guidelines Section -->
-        <div class="card margin-top">
+        <!-- 6. Monthly DB Accumulation Trend Chart -->
+        <div class="card">
           <div class="card-header">
-            <h3><i class="fa-solid fa-shield-heart"></i> AI 예방적 안전대책 가이드라인 (Proactive Guidelines)</h3>
+            <h3><i class="fa-solid fa-arrow-trend-up" style="color: #10b981;"></i> 월별 안전위험성평가 DB 축적 및 고위험 발굴 추이</h3>
+            <span style="font-size: 12px; color: #64748b;">* 막대를 클릭하면 해당 월의 상세 원형그래프 및 위험포인트를 즉시 조회합니다.</span>
           </div>
-          <div class="guidelines-grid" id="proactive-guidelines-container">
-            <!-- Guideline cards -->
-          </div>
+          <div class="monthly-trend-container" id="monthly-trend-container"></div>
         </div>
       </section>
 
@@ -500,6 +574,6 @@
   </div>
 
   <!-- Application Scripts -->
-  <script src="/js/app.js?v=20261124_4"></script>
+  <script src="/js/app.js?v=20261124_5"></script>
 </body>
 </html>
